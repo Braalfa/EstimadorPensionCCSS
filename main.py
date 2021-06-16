@@ -27,7 +27,7 @@ def loadInflacion():
     inflacionDF = inflacionDF.set_index(['Periodo'])
     # Numerico
     inflacionDF['Variacion'] = inflacionDF['Variacion'].apply(pd.to_numeric, errors='coerce')
-    inflacionDF['Variacion'] = inflacionDF['Variacion'].apply(lambda x: x+1)
+    inflacionDF['Variacion'] = inflacionDF['Variacion'].apply(lambda x: 1 + x/100)
     #Return
     return inflacionDF ['Variacion']
 
@@ -45,25 +45,43 @@ def loadCuotas():
     cuotasDF['Salario/Ingreso'] = cuotasDF['Salario/Ingreso'].apply(pd.to_numeric, errors='coerce')
     return cuotasDF
 
-def valorActual(fecha, valor, inflacionDF):
-    fechaSiguiente = fecha + relativedelta(months=1)
-    cambioAgregado = inflacionDF[fechaSiguiente:].aggregate('prod')
-    return valor*cambioAgregado
+def valorActual(cuotasDF, inflacionDF):
+    for i in range(len(cuotasDF['Salario/Ingreso'])):
+        valor = cuotasDF['Salario/Ingreso'][i]
+        fecha = cuotasDF['Salario/Ingreso'].index[i].to_pydatetime()
+        fechaSiguiente = fecha + relativedelta(months=1)
+        cambioAgregado = inflacionDF[fechaSiguiente:].aggregate('prod')
+        cuotasDF['Salario/Ingreso'][i] = valor*cambioAgregado
+    return cuotasDF
 
 cuotasDF = loadCuotas()
 inflacionDF = loadInflacion()
 salarioPromedioRestante = 770000
 anosRestantes = 7
-cuotasDF = cuotasDF.apply()
+numCuotasAntiguas = 240-anosRestantes*12
+cuotasDF['Salario/Ingreso'] = valorActual(cuotasDF, inflacionDF)
+pensionBase = ((cuotasDF[-1*numCuotasAntiguas:].mean()*numCuotasAntiguas+anosRestantes*12*salarioPromedioRestante)/240)*0.51
+cuotasRestantes = len(cuotasDF)-numCuotasAntiguas
+pensionTotal = pensionBase + cuotasDF[:cuotasRestantes].aggregate('mean')*cuotasRestantes*0.000833
+print(pensionTotal)
 
 # in order to print first 5 lines of Table
 
-# def main():
-#     file = open('pension.pdf', 'rb')
-#     fileReader = PyPDF2.PdfFileReader(file)
-#     fileReader.decrypt("")
-#     print(fileReader.getPage(0).extractText())
-#
-# if __name__ == '__main__':
-#     main()
+def main():
+    # Cargar datos
+    cuotasDF = loadCuotas()
+    inflacionDF = loadInflacion()
+    # Pension base
+    salarioPromedioRestante = 770000
+    anosRestantes = 7
+    numCuotasAntiguas = 240-anosRestantes*12
+    cuotasDF['Salario/Ingreso'] = valorActual(cuotasDF, inflacionDF)
+    pensionBase = ((cuotasDF[-1*numCuotasAntiguas:].mean()*numCuotasAntiguas+anosRestantes*12*salarioPromedioRestante)/240)*0.51
+    # Pension cuotas adicionales
+    cuotasRestantes = len(cuotasDF)-numCuotasAntiguas
+    pensionTotal = pensionBase + cuotasDF[:cuotasRestantes].aggregate('mean')*cuotasRestantes*0.000833
+    print(pensionTotal)
+
+if __name__ == '__main__':
+     main()
 
